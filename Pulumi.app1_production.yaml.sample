@@ -1,0 +1,5 @@
+config:
+  aws:profile: aws_profile
+  aws:region: us-east-1
+  pulumi_aws_create_certificates:generalTagName: app1
+  pulumi_aws_create_certificates:targetDomain: app1.com

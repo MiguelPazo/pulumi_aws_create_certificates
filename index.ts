@@ -1,30 +1,29 @@
 /**
  * Created by Miguel Pazo (https://miguelpazo.com)
  */
-
 import * as aws from "@pulumi/aws";
 import * as config from "./config";
 
 const domainsCdn = [];
 const domains = [];
 
-if (config.stack === 'dev') {
-    domains.push('dev.domain.com');
-    domains.push('api.domain.com');
+switch (config.stack) {
+    case 'app1_dev':
+        domains.push(`auth-dev.${config.targetDomain}`);
+        domains.push(`auth2-dev.${config.targetDomain}`);
+        break;
+
+    case 'app1_qa':
+        domains.push(`auth-qa.${config.targetDomain}`);
+        break;
+
+    case 'app1_production':
+        domainsCdn.push(`auth.${config.targetDomain}`);
+        domains.push(`auth-api.${config.targetDomain}`);
+        break;
 }
 
-if (config.stack === 'qa') {
-    domainsCdn.push('qa.domain.com');
-    domains.push('api-qa.domain.com');
-}
-
-if (config.stack === 'production') {
-    domainsCdn.push('domain.com');
-    domainsCdn.push('www.domain.com');
-    domains.push('api.domain.com');
-}
-
-let result = [];
+let result = {};
 
 const providerUs = new aws.Provider("provider-us", {
     profile: aws.config.profile,
@@ -56,10 +55,6 @@ function createCertificate(domain: string, provider: aws.Provider) {
 
     const hostedZoneId = aws.route53.getZone({name: `${domain}.`}, {async: true}).then(zone => zone.zoneId);
 
-    /**
-     *  Create a DNS record to prove that we _own_ the domain we're requesting a certificate for.
-     *  See https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-validate-dns.html for more info.
-     */
     const certificateValidationDomain = new aws.route53.Record(`${domain}-validation`, {
         name: certificate.domainValidationOptions[0].resourceRecordName,
         zoneId: hostedZoneId,
@@ -68,20 +63,12 @@ function createCertificate(domain: string, provider: aws.Provider) {
         ttl: 60 * 60,
     });
 
-    /**
-     * This is a _special_ resource that waits for ACM to complete validation via the DNS record
-     * checking for a status of "ISSUED" on the certificate itself. No actual resources are
-     * created (or updated or deleted).
-     */
     const certificateValidation = new aws.acm.CertificateValidation(`${domain}-certificateValidation`, {
         certificateArn: certificate.arn,
         validationRecordFqdns: [certificateValidationDomain.fqdn],
     }, {provider: provider});
 
-    result.push({
-        domain: domain,
-        certificateArn: certificateValidation.certificateArn
-    })
+    result[domain] = certificateValidation.certificateArn;
 }
 
-export const certificates = result;
+export {result}
